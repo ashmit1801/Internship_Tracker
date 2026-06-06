@@ -1,0 +1,293 @@
+{
+  "name": "Career Opportunity Monitor — Aerospace & EV",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-sonnet-4-20250514",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a career research assistant specializing in Indian aerospace, defense, drone, EV, and robotics companies.\n\nSearch the internet RIGHT NOW for any current job openings, internships, or trainee positions at these companies:\n1. ideaForge (ideaforge.in)\n2. Garuda Aerospace (garudaaerospace.com)\n3. Asteria Aerospace (asteria.aero)\n4. Skyroot Aerospace (skyroot.in)\n5. Ultraviolette Automotive (ultraviolette.co)\n6. SSS Defence (sssdefence.com)\n7. Vazirani Automotive (vaziraniautomotive.com)\n\nSearch ALL of these sources for each company:\n- Official careers/jobs page\n- LinkedIn Jobs\n- Internshala\n- Wellfound (AngelList)\n- Naukri.com\n- Indeed India\n- Glassdoor India\n- Company LinkedIn posts and announcements\n\nFocus on:\n- Internships (any type)\n- Graduate Engineer Trainee (GET)\n- Research/Project internships\n- Summer/Winter internships\n- Entry-level full-time engineering roles\n- R&D openings\n- Roles in: Embedded Systems, Mechanical, Aerospace, UAV, Robotics, Autonomous Systems, Vehicle Dynamics, CAD/CAE, Simulation, Electronics\n\nFor EVERY opening found, return a JSON array. Each object must have exactly these fields:\n{\n  \"job_id\": \"<company_slug>-<role_slug>-<YYYYMM>\" (e.g. ideaforge-uav-intern-202506),\n  \"company\": \"<Company Name>\",\n  \"title\": \"<Exact Position Title>\",\n  \"type\": \"Internship\" or \"Full-time\",\n  \"department\": \"<Domain/Department>\",\n  \"location\": \"<City, State>\",\n  \"mode\": \"On-site\" or \"Hybrid\" or \"Remote\",\n  \"duration\": \"<Duration if internship, else null>\",\n  \"stipend_salary\": \"<Amount or null if not stated>\",\n  \"deadline\": \"<Application deadline or null if not stated>\",\n  \"apply_link\": \"<Direct application URL>\",\n  \"source\": \"<Where you found it>\",\n  \"eligibility\": {\n    \"degree\": \"<Required degree>\",\n    \"branches\": [\"<eligible branches>\"],\n    \"year\": \"<Year of study if specified>\",\n    \"cgpa\": \"<Min CGPA or null>\",\n    \"skills\": [\"<required technical skills>\"],\n    \"software_tools\": [\"<CAD/CAE/simulation tools>\"],\n    \"languages\": [\"<programming languages>\"],\n    \"other\": \"<any other requirements>\"\n  },\n  \"raw_description\": \"<Full JD text as found>\"\n}\n\nReturn ONLY the raw JSON array. No markdown, no explanation, no backticks. If no openings found, return []."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "claude-search",
+      "name": "Claude — Search All Companies",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude's JSON output safely\nconst raw = $input.first().json.text || $input.first().json.content || '';\n\nlet jobs = [];\ntry {\n  const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();\n  jobs = JSON.parse(cleaned);\n} catch (e) {\n  // If parse fails, return empty so workflow ends gracefully\n  jobs = [];\n}\n\nif (!Array.isArray(jobs) || jobs.length === 0) {\n  return [{ json: { no_new_jobs: true } }];\n}\n\nreturn jobs.map(job => ({ json: job }));"
+      },
+      "id": "parse-jobs",
+      "name": "Parse Job Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "check-empty",
+              "leftValue": "={{ $json.no_new_jobs }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-empty",
+      "name": "Any Jobs Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SeenJobs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "read-seen-ids",
+      "name": "Read Seen Job IDs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.3,
+      "position": [1100, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all seen job IDs from the Google Sheet\nconst seenRows = $('Read Seen Job IDs').all();\nconst seenIds = new Set(seenRows.map(r => r.json.job_id).filter(Boolean));\n\n// Get current job from previous node\nconst job = $input.first().json;\n\n// Check if this job is new\nif (seenIds.has(job.job_id)) {\n  return [{ json: { is_new: false, job } }];\n}\n\nreturn [{ json: { is_new: true, job } }];"
+      },
+      "id": "dedup-check",
+      "name": "Check If New",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "is-new",
+              "leftValue": "={{ $json.is_new }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "filter-new",
+      "name": "Is New Opportunity?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 180]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-sonnet-4-20250514",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a career advisor assessing job fit for a Mechanical Engineering undergraduate.\n\nCandidate profile:\n- Degree: Mechanical Engineering undergraduate (ongoing)\n- Strong interest: UAVs, drones, aerospace, motorsports, electric vehicles\n- Experience: Arduino-based flight controllers, embedded systems\n- CAD: Assembly design, engineering design projects\n- GitHub: Active project portfolio\n- Other: Keen on R&D, autonomous systems, vehicle dynamics\n\nJob to assess:\n{{ JSON.stringify($json.job) }}\n\nProvide ONLY a JSON object with these exact fields (no markdown, no explanation):\n{\n  \"match_score\": <integer 1-10>,\n  \"why_suitable\": \"<2-3 sentence explanation of why this fits the candidate>\",\n  \"missing_skills\": [\"<skill1>\", \"<skill2>\"],\n  \"suggestions\": \"<1-2 actionable tips to improve chances>\",\n  \"recommended_action\": \"Apply immediately\" or \"Prepare portfolio first\" or \"Upskill before applying\"\n}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "claude-score",
+      "name": "Claude — Score Profile Match",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [1760, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge job data with match scoring\nconst job = $('Is New Opportunity?').first().json.job;\nconst raw = $input.first().json.text || $input.first().json.content || '{}';\n\nlet score = {};\ntry {\n  const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();\n  score = JSON.parse(cleaned);\n} catch(e) {\n  score = {\n    match_score: 5,\n    why_suitable: 'Could not parse scoring.',\n    missing_skills: [],\n    suggestions: 'Review manually.',\n    recommended_action: 'Apply immediately'\n  };\n}\n\nreturn [{ json: { ...job, ...score } }];"
+      },
+      "id": "merge-score",
+      "name": "Merge Job + Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 120]
+    },
+    {
+      "parameters": {
+        "sendTo": "captainash1801@gmail.com",
+        "subject": "=[New Opportunity] {{ $json.company }} — {{ $json.title }}",
+        "emailType": "html",
+        "message": "=<!DOCTYPE html>\n<html>\n<body style=\"font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; color: #1a1a1a;\">\n\n<div style=\"background: #1e3a5f; color: white; padding: 20px 24px; border-radius: 8px 8px 0 0;\">\n  <h2 style=\"margin:0; font-size:20px;\">🚀 New Opportunity Detected</h2>\n  <p style=\"margin:6px 0 0; opacity:0.85; font-size:14px;\">Career Monitor — Aerospace & EV Roles</p>\n</div>\n\n<div style=\"border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px; padding: 24px;\">\n\n  <!-- Basic Info -->\n  <table style=\"width:100%; border-collapse:collapse; margin-bottom:20px;\">\n    <tr><td style=\"padding:6px 0; color:#555; width:160px;\">Company</td><td style=\"padding:6px 0; font-weight:600;\">{{ $json.company }}</td></tr>\n    <tr><td style=\"padding:6px 0; color:#555;\">Role</td><td style=\"padding:6px 0; font-weight:600;\">{{ $json.title }}</td></tr>\n    <tr><td style=\"padding:6px 0; color:#555;\">Type</td><td style=\"padding:6px 0;\">{{ $json.type }}</td></tr>\n    <tr><td style=\"padding:6px 0; color:#555;\">Department</td><td style=\"padding:6px 0;\">{{ $json.department }}</td></tr>\n    <tr><td style=\"padding:6px 0; color:#555;\">Location</td><td style=\"padding:6px 0;\">{{ $json.location }} ({{ $json.mode }})</td></tr>\n    {{ $json.duration ? '<tr><td style=\"padding:6px 0; color:#555;\">Duration</td><td style=\"padding:6px 0;\">' + $json.duration + '</td></tr>' : '' }}\n    {{ $json.stipend_salary ? '<tr><td style=\"padding:6px 0; color:#555;\">Stipend / Salary</td><td style=\"padding:6px 0;\">' + $json.stipend_salary + '</td></tr>' : '' }}\n    {{ $json.deadline ? '<tr><td style=\"padding:6px 0; color:#555;\">Deadline</td><td style=\"padding:6px 0; color:#c0392b; font-weight:600;\">' + $json.deadline + '</td></tr>' : '' }}\n    <tr><td style=\"padding:6px 0; color:#555;\">Source</td><td style=\"padding:6px 0;\">{{ $json.source }}</td></tr>\n  </table>\n\n  <!-- Apply Button -->\n  <div style=\"text-align:center; margin: 16px 0 24px;\">\n    <a href=\"{{ $json.apply_link }}\" style=\"background:#1e3a5f; color:white; padding:12px 32px; border-radius:6px; text-decoration:none; font-weight:600; font-size:15px;\">Apply Now →</a>\n  </div>\n\n  <hr style=\"border:none; border-top:1px solid #eee; margin:20px 0;\">\n\n  <!-- Eligibility -->\n  <h3 style=\"color:#1e3a5f; font-size:16px; margin:0 0 12px;\">Eligibility & Requirements</h3>\n  <table style=\"width:100%; border-collapse:collapse; margin-bottom:20px;\">\n    <tr><td style=\"padding:5px 0; color:#555; width:160px; vertical-align:top;\">Degree</td><td style=\"padding:5px 0;\">{{ $json.eligibility.degree }}</td></tr>\n    <tr><td style=\"padding:5px 0; color:#555; vertical-align:top;\">Branches</td><td style=\"padding:5px 0;\">{{ $json.eligibility.branches.join(', ') }}</td></tr>\n    {{ $json.eligibility.year ? '<tr><td style=\"padding:5px 0; color:#555;\">Year</td><td style=\"padding:5px 0;\">' + $json.eligibility.year + '</td></tr>' : '' }}\n    {{ $json.eligibility.cgpa ? '<tr><td style=\"padding:5px 0; color:#555;\">Min CGPA</td><td style=\"padding:5px 0;\">' + $json.eligibility.cgpa + '</td></tr>' : '' }}\n    <tr><td style=\"padding:5px 0; color:#555; vertical-align:top;\">Technical skills</td><td style=\"padding:5px 0;\">{{ $json.eligibility.skills.join(', ') }}</td></tr>\n    {{ $json.eligibility.software_tools && $json.eligibility.software_tools.length ? '<tr><td style=\"padding:5px 0; color:#555; vertical-align:top;\">Software / Tools</td><td style=\"padding:5px 0;\">' + $json.eligibility.software_tools.join(', ') + '</td></tr>' : '' }}\n    {{ $json.eligibility.languages && $json.eligibility.languages.length ? '<tr><td style=\"padding:5px 0; color:#555;\">Languages</td><td style=\"padding:5px 0;\">' + $json.eligibility.languages.join(', ') + '</td></tr>' : '' }}\n    {{ $json.eligibility.other ? '<tr><td style=\"padding:5px 0; color:#555; vertical-align:top;\">Other</td><td style=\"padding:5px 0;\">' + $json.eligibility.other + '</td></tr>' : '' }}\n  </table>\n\n  <hr style=\"border:none; border-top:1px solid #eee; margin:20px 0;\">\n\n  <!-- Match Score -->\n  <h3 style=\"color:#1e3a5f; font-size:16px; margin:0 0 12px;\">Profile Match Analysis</h3>\n  <div style=\"display:flex; align-items:center; gap:16px; margin-bottom:12px;\">\n    <div style=\"background:#1e3a5f; color:white; border-radius:50%; width:54px; height:54px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; flex-shrink:0;\">{{ $json.match_score }}/10</div>\n    <div style=\"color:#333;\">{{ $json.why_suitable }}</div>\n  </div>\n  {{ $json.missing_skills && $json.missing_skills.length ? '<p style=\"margin:8px 0;\"><strong>Missing skills:</strong> ' + $json.missing_skills.join(', ') + '</p>' : '' }}\n  <p style=\"margin:8px 0;\"><strong>Suggestions:</strong> {{ $json.suggestions }}</p>\n\n  <hr style=\"border:none; border-top:1px solid #eee; margin:20px 0;\">\n\n  <!-- Recommended Action -->\n  <div style=\"background:#f0f7ff; border-left:4px solid #1e3a5f; padding:14px 16px; border-radius:0 6px 6px 0;\">\n    <strong>Recommended Action:</strong> {{ $json.recommended_action }}\n  </div>\n\n  <p style=\"color:#aaa; font-size:12px; margin-top:24px;\">Sent by your Career Monitor n8n workflow · {{ $now.toFormat('dd MMM yyyy, HH:mm') }}</p>\n</div>\n\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Alert Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [2200, 60]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SeenJobs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "job_id": "={{ $json.job_id }}",
+            "company": "={{ $json.company }}",
+            "title": "={{ $json.title }}",
+            "type": "={{ $json.type }}",
+            "location": "={{ $json.location }}",
+            "apply_link": "={{ $json.apply_link }}",
+            "match_score": "={{ $json.match_score }}",
+            "recommended_action": "={{ $json.recommended_action }}",
+            "deadline": "={{ $json.deadline }}",
+            "date_found": "={{ $now.toFormat('yyyy-MM-dd HH:mm') }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-to-sheet",
+      "name": "Log to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.3,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No new jobs found — silent end\nconsole.log('Career monitor ran. No new listings found at ' + new Date().toISOString());\nreturn [];"
+      },
+      "id": "silent-end",
+      "name": "No New Jobs — End Silently",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 460]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [{ "node": "Claude — Search All Companies", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude — Search All Companies": {
+      "main": [
+        [{ "node": "Parse Job Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Job Results": {
+      "main": [
+        [{ "node": "Any Jobs Found?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Any Jobs Found?": {
+      "main": [
+        [{ "node": "No New Jobs — End Silently", "type": "main", "index": 0 }],
+        [{ "node": "Read Seen Job IDs", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Seen Job IDs": {
+      "main": [
+        [{ "node": "Check If New", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check If New": {
+      "main": [
+        [{ "node": "Is New Opportunity?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is New Opportunity?": {
+      "main": [
+        [],
+        [{ "node": "Claude — Score Profile Match", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude — Score Profile Match": {
+      "main": [
+        [{ "node": "Merge Job + Score", "type": "main", "index": 0 }]
+      ]
+    },
+    "Merge Job + Score": {
+      "main": [
+        [
+          { "node": "Send Alert Email", "type": "main", "index": 0 },
+          { "node": "Log to Google Sheet", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["career", "monitoring", "aerospace", "internship"],
+  "meta": {
+    "instanceId": "career-monitor-v1"
+  }
+}
