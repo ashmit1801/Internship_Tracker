@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Career Monitor — System Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --accent3: #10b981;
+    --accent4: #f59e0b;
+    --accent5: #ef4444;
+    --accent6: #ec4899;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 64px;
+  }
+
+  .header .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .header .eyebrow::before,
+  .header .eyebrow::after {
+    content: '';
+    width: 40px;
+    height: 1px;
+    background: var(--accent);
+    opacity: 0.4;
+  }
+
+  .header h1 {
+    font-size: clamp(28px, 5vw, 48px);
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header p {
+    color: var(--text2);
+    font-size: 16px;
+    line-height: 1.6;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+
+  /* Stats bar */
+  .stats {
+    display: flex;
+    gap: 1px;
+    background: var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 64px;
+    border: 1px solid var(--border);
+  }
+
+  .stat {
+    flex: 1;
+    background: var(--surface);
+    padding: 20px 16px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Section title */
+  .section-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Pipeline */
+  .pipeline {
+    margin-bottom: 64px;
+  }
+
+  .pipeline-track {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  .pipeline-track::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 28px;
+    bottom: 28px;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--accent), var(--accent2), var(--accent3), var(--accent4), var(--accent6));
+    opacity: 0.3;
+  }
+
+  .step {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .step + .step {
+    margin-top: 8px;
+  }
+
+  .step-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    padding-top: 4px;
+  }
+
+  .step-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+    border: 1px solid transparent;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .step:hover .step-icon {
+    transform: scale(1.08);
+  }
+
+  .step-body {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 8px;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .step-body::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .step:hover .step-body {
+    border-color: rgba(0,212,255,0.3);
+    background: var(--surface2);
+  }
+
+  .step:hover .step-body::before {
+    opacity: 1;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .step-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+  }
+
+  .step-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+  }
+
+  .step-tag {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .step-desc {
+    color: var(--text2);
+    font-size: 13.5px;
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+
+  .step-detail {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.7;
+    display: none;
+  }
+
+  .step-detail.visible {
+    display: block;
+  }
+
+  .step-detail .highlight { color: var(--accent); }
+  .step-detail .green { color: var(--accent3); }
+  .step-detail .amber { color: var(--accent4); }
+  .step-detail .purple { color: #a78bfa; }
+
+  /* Arrow between steps */
+  .arrow {
+    display: flex;
+    align-items: center;
+    padding-left: 76px;
+    height: 20px;
+    color: var(--text3);
+    font-size: 18px;
+  }
+
+  /* Color variants */
+  .c-cyan .step-icon { background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.2); }
+  .c-cyan .step-body::before { background: var(--accent); }
+  .c-cyan .step-tag { background: rgba(0,212,255,0.1); color: var(--accent); }
+
+  .c-purple .step-icon { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.2); }
+  .c-purple .step-body::before { background: var(--accent2); }
+  .c-purple .step-tag { background: rgba(124,58,237,0.1); color: #a78bfa; }
+
+  .c-green .step-icon { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.2); }
+  .c-green .step-body::before { background: var(--accent3); }
+  .c-green .step-tag { background: rgba(16,185,129,0.1); color: var(--accent3); }
+
+  .c-amber .step-icon { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.2); }
+  .c-amber .step-body::before { background: var(--accent4); }
+  .c-amber .step-tag { background: rgba(245,158,11,0.1); color: var(--accent4); }
+
+  .c-red .step-icon { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.2); }
+  .c-red .step-body::before { background: var(--accent5); }
+  .c-red .step-tag { background: rgba(239,68,68,0.1); color: var(--accent5); }
+
+  .c-pink .step-icon { background: rgba(236,72,153,0.1); border-color: rgba(236,72,153,0.2); }
+  .c-pink .step-body::before { background: var(--accent6); }
+  .c-pink .step-tag { background: rgba(236,72,153,0.1); color: var(--accent6); }
+
+  /* Branch visualization */
+  .branch {
+    margin-left: 76px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .branch-header {
+    background: var(--surface);
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 16px;
+  }
+
+  .branch-yes { color: var(--accent3); }
+  .branch-no { color: var(--accent5); }
+
+  .branch-paths {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .branch-path {
+    background: var(--surface2);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .branch-path .path-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  /* Companies grid */
+  .companies {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 64px;
+  }
+
+  .company-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .company-card:hover {
+    border-color: rgba(0,212,255,0.3);
+    transform: translateY(-2px);
+  }
+
+  .company-name {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .company-domain {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+  }
+
+  /* Tools used */
+  .tools {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 64px;
+  }
+
+  .tool-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .tool-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+
+  .tool-name {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .tool-role {
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+
+  /* Data flow diagram */
+  .data-flow {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 64px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 2;
+    color: var(--text2);
+    overflow-x: auto;
+  }
+
+  .data-flow .flow-line { display: block; }
+  .data-flow .node { color: var(--text); font-weight: 600; }
+  .data-flow .arrow-down { color: var(--accent); opacity: 0.6; padding-left: 20px; }
+  .data-flow .branch-yes-flow { color: var(--accent3); }
+  .data-flow .branch-no-flow { color: var(--accent5); }
+  .data-flow .indent { padding-left: 40px; }
+  .data-flow .indent2 { padding-left: 80px; }
+  .data-flow .comment { color: var(--text3); font-size: 11px; }
+
+  /* Email preview */
+  .email-preview {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 64px;
+  }
+
+  .email-preview-header {
+    background: var(--surface2);
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .email-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .email-body {
+    padding: 24px;
+  }
+
+  .email-subject {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 16px;
+    color: var(--accent);
+  }
+
+  .email-field {
+    display: flex;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .email-field:last-child { border-bottom: none; }
+
+  .email-label {
+    color: var(--text3);
+    width: 120px;
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding-top: 1px;
+  }
+
+  .email-value { color: var(--text2); }
+  .email-value.highlight { color: var(--accent3); font-weight: 600; }
+  .email-value.score {
+    color: var(--accent);
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  /* Footer note */
+  .footer {
+    text-align: center;
+    padding: 40px 0;
+    border-top: 1px solid var(--border);
+    color: var(--text3);
+    font-size: 13px;
+    font-family: var(--mono);
+  }
+
+  .hint {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text3);
+    margin-bottom: 32px;
+    font-family: var(--mono);
+  }
+
+  .hint span {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+  }
+
+  @media (max-width: 600px) {
+    .stats { flex-direction: column; gap: 1px; }
+    .branch-paths { grid-template-columns: 1fr; }
+    .companies { grid-template-columns: repeat(2, 1fr); }
+    .tools { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="eyebrow">System Architecture</div>
+    <h1>Autonomous Career Intelligence System</h1>
+    <p>An n8n workflow that hunts for aerospace & EV job openings 24/7 using Claude AI, deduplicates via Google Sheets, and fires instant profile-matched email alerts.</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat">
+      <span class="stat-value">7</span>
+      <span class="stat-label">Companies tracked</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">10+</span>
+      <span class="stat-label">Job portals searched</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">6h</span>
+      <span class="stat-label">Check interval</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">0</span>
+      <span class="stat-label">Manual effort needed</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">∞</span>
+      <span class="stat-label">Runs automatically</span>
+    </div>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="pipeline">
+    <div class="section-title">Full Workflow — Click any step to expand</div>
+    <p class="hint"><span>↓ Click each node to see exactly what it does</span></p>
+
+    <div class="pipeline-track">
+
+      <!-- Step 1 -->
+      <div class="step c-cyan" onclick="toggle(this)">
+        <div class="step-connector">
+          <div class="step-icon">⏰</div>
+        </div>
+        <div class="step-body">
+          <div class="step-header">
+            <span class="step-num">01</span>
+            <span class="step-name">Schedule Trigger</span>
+            <span class="step-tag">TRIGGER</span>
+          </div>
+          <div class="step-desc">Automatically wakes the workflow every 6 hours — at midnight, 6am, noon, and 6pm. No human interaction needed.</div>
+          <div class="step-detail">
+            <span class="highlight">Node type:</span> n8n Schedule Trigger<br>
+            <span class="highlight">Interval:</span> Every 6 hours<br>
+            <span class="highlight">Output:</span> Timestamp + date/time metadata<br>
+            <span class="green">→ Passes timestamp to the next node</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <!-- Step 2 -->
+      <div class="step c-purple" onclick="toggle(this)">
+        <div class="step-connector">
+          <div class="step-icon">🤖</div>
+        </div>
+        <div class="step-body">
+          <div class="step-header">
+            <span class="step-num">02</span>
+            <span class="step-name">AI Agent — Search All Companies</span>
+            <span class="step-tag">AI AGENT</span>
+          </div>
+          <div class="step-desc">The brain of the system. Uses Claude Sonnet 4.6 + SerpAPI to actively search the internet for job postings at all 7 companies across all portals. Returns structured JSON.</div>
+          <div class="step-detail">
+            <span class="highlight">Node type:</span> n8n AI Agent<br>
+            <span class="highlight">Model:</span> Claude Sonnet 4.6 (via Anthropic Chat Model sub-node)<br>
+            <span class="highlight">Tool:</span> Google Search via SerpAPI sub-node<br>
+            <span class="highlight">Prompt source:</span> Define below (not chat trigger)<br>
+            <br>
+            <span class="purple">What Claude searches:</span><br>
+            → LinkedIn Jobs, Internshala, Wellfound, Naukri<br>
+            → Indeed India, Glassdoor, official career pages<br>
+            → Company LinkedIn posts & announcements<br>
+            <br>
+            <span class="green">Output format:</span> Raw JSON array of job objects<br>
+            Each object has: job_id, company, title, type, department,<br>
+            location, mode, duration, stipend, deadline, apply_link,<br>
+            source, eligibility{degree, branches, skills, tools...}
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <!-- Step 3 -->
+      <div class="step c-cyan" onclick="toggle(this)">
+        <div class="step-connector">
+          <div class="step-icon">⚙️</div>
+        </div>
+        <div class="step-body">
+          <div class="step-header">
+            <span class="step-num">03</span>
+            <span class="step-name">Parse Job Results</span>
+            <span class="step-tag">CODE</span>
+          </div>
+          <div class="step-desc">Converts Claude's raw text output into clean structured data. Strips markdown formatting, parses JSON, and splits the array so each job flows through the pipeline individually.</div>
+          <div class="step-detail">
+            <span class="highlight">Node type:</span> n8n Code (JavaScript)<br>
+            <br>
+            <span class="amber">Logic:</span><br>
+            1. Extract text from Claude's response<br>
+            2. Strip ```json fences if present<br>
+            3. Parse as JSON array<br>
+            4. If empty → return {no_new_jobs: true}<br>
+            5. If has items → split into individual items<br>
+            <br>
+            <span class="green">Why needed:</span> Claude returns text; n8n needs<br>
+            structured JSON objects to route between nodes
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <!-- Step 4 -->
+      <div class="step c-amber" onclick="toggle(this)">
+        <div class="step-connector">
+          <div class="step-icon">🔀</div>
+        </div>
+        <div class="step-body">
+          <div class="step-header">
+            <span class="step-num">04</span>
+            <span class="step-name">Any Jobs Found?</span>
+            <span class="step-tag">IF / BRANCH</span>
+          </div>
+          <div class="step-desc">First decision gate. If Claude found zero openings this run, the workflow ends silently — no email, no noise. Only real results continue.</div>
+          <div class="step-detail">
+            <span class="highlight">Node type:</span> n8n IF node<br>
+            <span class="highlight">Condition:</span> Is no_new_jobs === true?<br>
+            <br>
+            <span class="green">TRUE branch →</span> "No New Jobs — End Silently"<br>
+            <span class="amber">FALSE branch →</span> Continue to deduplication<br>
+            <br>
+            <span class="amber">Why silent end?</span> You don't want an email<br>
+            every 6 hours saying "nothing found"
+          </div>
+        </div>
+      </div>
+
+      <!-- Branch display -->
+      <div class="branch">
+        <div class="branch-header">
+          <span>Decision point</span>
+          <span class="branch-yes">● TRUE path</span>
+          <span class="branch-no">● FALSE path</span>
+        </div>
+        <div class="branch-paths">
+          <div class="branch-path">
+            <div class="path-label branch-yes">✓ NO JOBS FOUND</div>
+            Goes to "End Silently" node → workflow stops quietly. No email sent. Runs again in 6 hours.
+          </div>
+          <div class="branch-path">
+            <div class="path-label branch-no">→ JOBS FOUND</div>
+            Continues to Google Sheet deduplication check for each job found.
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓ (jobs found path continues)</div>
+
+      <!-- Step 5 -->
+      <div class="step c-green" onclick="toggle(this)">
+        <div class="step-connector">
+          <div class="step-icon">📊</div>
+        </div>
+        <div class="step-body">
+          <div class="step-header">
+            <span class="step-num">05</span>
+            <span class="step-name">Read Seen Job IDs</span>
+            <span class="step-tag">GOOGLE SHEETS</span>
+          </div>
+          <div class="step-desc">Reads your entire SeenJobs Google Sheet and loads all previously alerted job IDs into memory. This is how the system knows what it's already told you about.</div>
+          <div class="step-detail">
+            <span class="highlight">Node type:</span> Google Sheets → Get Row(s)<br>
+            <span class="highlight">Document:</span> SeenJobs (from list)<br>
+            <span class="highlight">Sheet tab:</span> Sheet1<br>
+            <span class="highlight">Credential:</span> Google Sheets account 3<br>
+            <br>
+            <span class="green">Output:</span> Array of all rows, each with job_id,<br>
+            company, title, date_found etc.<br>
+            <br>
+            <span class="amber">The SeenJobs sheet columns:</span><br>
+            job_id | company | title | type | location<br>
+            apply_link | match_score | recommended_action<br>
+            deadline | date_found
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <!-- Step 6 -->
+      <div class="step c-cyan" onclick="toggle(this)">
+        <div class="step-connector">
+          <div class="step-icon">🔍</div>
+        </div>
+        <div class="step-body">
+          <div class="step-header">
+            <span class="step-num">06</span>
+            <span class="step-name">Check If New</span>
+            <span class="step-tag">CODE</span>
+          </div>
+          <div class="step-desc">Compares this job's unique ID against all IDs in the Google Sheet. If it's been seen before → mark as not new. If it's genuinely new → flag it to continue.</div>
+          <div class="step-detail">
+            <span class="highlight">Node type:</span> n8n Code (JavaScript)<br>
+            <br>
+            <span class="amber">Logic:</span><br>
+            1. Build a Set of all seen job_ids from sheet<br>
+            2. Check if current job's job_id is in Set<br>
+            3. Return {is_new: false} if already seen<br>
+            4. Return {is_new: true, job: {...}} if new<br>
+            <br>
+            <span class="green">Job ID format:</span><br>
+            company-role-YYYYMM<br>
+            e.g. "ideaforge-uav-intern-202506"<br>
+            <br>
+            <span class="amber">Why a Set?</span> O(1) lookup — fast even with<br>
+            hundreds of previously seen jobs
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <!-- Step 7 -->
+      <div class="step c-amber" onclick="toggle(this)">
+        <div class="step-connector">
+          <div class="step-icon">🔀</div>
+        </div>
+        <div class="step-body">
+          <div class="step-header">
+            <span class="step-num">07</span>
+            <span class="step-name">Is New Opportunity?</span>
+            <span class="step-tag">IF / BRANCH</span>
+          </div>
+          <div class="step-desc">Second decision gate. Already alerted jobs are dropped here. Only genuinely new listings proceed to AI scoring and email.</div>
+          <div class="step-detail">
+            <span class="highlight">Node type:</span> n8n IF node<br>
+            <span class="highlight">Condition:</span> is_new === true<br>
+            <br>
+            <span class="amber">FALSE →</span> Stop (already sent email for this job)<br>
+            <span class="green">TRUE →</span> Continue to profile match scoring<br>
+            <br>
+            <span class="amber">This is the deduplication gate.</span> Without<br>
+            this, you'd get the same email for the<br>
+            same job every 6 hours forever.
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓ (new job path)</div>
+
+      <!-- Step 8 -->
+      <div class="step c-purple" onclick="toggle(this)">
+        <div class="step-connector">
+          <div class="step-icon">🧠</div>
+        </div>
+        <div class="step-body">
+          <div class="step-header">
+            <span class="step-num">08</span>
+            <span class="step-name">Claude — Score Profile Match</span>
+            <span class="step-tag">AI AGENT</span>
+          </div>
+          <div class="step-desc">A second Claude call that reads the job details and scores it against your specific engineering profile — ME background, UAV experience, Arduino, CAD, embedded systems, GitHub portfolio.</div>
+          <div class="step-detail">
+            <span class="highlight">Node type:</span> n8n AI Agent<br>
+            <span class="highlight">Model:</span> Claude Sonnet 4.6<br>
+            <br>
+            <span class="purple">Your profile Claude scores against:</span><br>
+            → Mechanical Engineering undergraduate<br>
+            → UAV, drones, aerospace, motorsports interest<br>
+            → Arduino-based flight controller experience<br>
+            → CAD assembly and engineering design<br>
+            → Embedded systems exposure<br>
+            → Active GitHub project portfolio<br>
+            <br>
+            <span class="green">Output JSON:</span><br>
+            match_score: 1–10<br>
+            why_suitable: "2-3 sentence explanation"<br>
+            missing_skills: ["ROS", "Python"]<br>
+            suggestions: "Add ROS project to GitHub"<br>
+            recommended_action: "Apply immediately"
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <!-- Step 9 -->
+      <div class="step c-cyan" onclick="toggle(this)">
+        <div class="step-connector">
+          <div class="step-icon">🔗</div>
+        </div>
+        <div class="step-body">
+          <div class="step-header">
+            <span class="step-num">09</span>
+            <span class="step-name">Merge Job + Score</span>
+            <span class="step-tag">CODE</span>
+          </div>
+          <div class="step-desc">Combines the job data from the search step with the scoring data from Claude into one unified object, ready to be formatted into an email.</div>
+          <div class="step-detail">
+            <span class="highlight">Node type:</span> n8n Code (JavaScript)<br>
+            <br>
+            <span class="amber">Logic:</span><br>
+            1. Get job object from step 7<br>
+            2. Parse Claude's scoring output<br>
+            3. Merge: {...job, ...score}<br>
+            4. Pass unified object forward<br>
+            <br>
+            <span class="green">Why separate?</span> The search and scoring<br>
+            are two different AI calls. This merges<br>
+            them back into one clean data object.
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓ (splits into two parallel paths)</div>
+
+      <!-- Step 10 + 11 side by side -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;">
+        <div class="step c-pink" onclick="toggle(this)" style="flex-direction:column;">
+          <div style="display:flex;gap:16px;align-items:flex-start;">
+            <div class="step-icon" style="width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;background:rgba(236,72,153,0.1);border:1px solid rgba(236,72,153,0.2);">📧</div>
+            <div class="step-body" style="margin:0;flex:1;">
+              <div class="step-header" style="flex-wrap:wrap;">
+                <span class="step-num">10</span>
+                <span class="step-name" style="font-size:13px;">Send Alert Email</span>
+                <span class="step-tag" style="background:rgba(236,72,153,0.1);color:#ec4899;">GMAIL</span>
+              </div>
+              <div class="step-desc" style="font-size:12px;">Sends a rich HTML email to captainash1801@gmail.com with full job details, eligibility, match score, and apply button.</div>
+              <div class="step-detail">
+                <span class="highlight">To:</span> captainash1801@gmail.com<br>
+                <span class="highlight">Subject:</span> [New Opportunity] Company — Role<br>
+                <span class="highlight">Format:</span> Rich HTML email<br>
+                <br>
+                <span class="green">Email contains:</span><br>
+                → Company, role, location, type<br>
+                → Deadline (highlighted in red)<br>
+                → Direct Apply Now button<br>
+                → Full eligibility & requirements<br>
+                → Match score (X/10)<br>
+                → Why suitable paragraph<br>
+                → Missing skills list<br>
+                → Recommended action
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step c-green" onclick="toggle(this)" style="flex-direction:column;">
+          <div style="display:flex;gap:16px;align-items:flex-start;">
+            <div class="step-icon" style="width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);">📋</div>
+            <div class="step-body" style="margin:0;flex:1;">
+              <div class="step-header" style="flex-wrap:wrap;">
+                <span class="step-num">11</span>
+                <span class="step-name" style="font-size:13px;">Log to Google Sheet</span>
+                <span class="step-tag" style="background:rgba(16,185,129,0.1);color:#10b981;">SHEETS</span>
+              </div>
+              <div class="step-desc" style="font-size:12px;">Appends the job to SeenJobs sheet so it's never emailed again. Runs in parallel with the email.</div>
+              <div class="step-detail">
+                <span class="highlight">Operation:</span> Append Row<br>
+                <span class="highlight">Document:</span> SeenJobs<br>
+                <span class="highlight">Mode:</span> Map Automatically<br>
+                <br>
+                <span class="green">Columns written:</span><br>
+                job_id, company, title, type<br>
+                location, apply_link, match_score<br>
+                recommended_action, deadline<br>
+                date_found (timestamp)
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Companies -->
+  <div class="section-title">Companies Being Monitored</div>
+  <div class="companies">
+    <div class="company-card">
+      <div class="company-name">ideaForge</div>
+      <div class="company-domain">ideaforge.in</div>
+    </div>
+    <div class="company-card">
+      <div class="company-name">Garuda Aerospace</div>
+      <div class="company-domain">garudaaerospace.com</div>
+    </div>
+    <div class="company-card">
+      <div class="company-name">Asteria Aerospace</div>
+      <div class="company-domain">asteria.aero</div>
+    </div>
+    <div class="company-card">
+      <div class="company-name">Skyroot Aerospace</div>
+      <div class="company-domain">skyroot.in</div>
+    </div>
+    <div class="company-card">
+      <div class="company-name">Ultraviolette</div>
+      <div class="company-domain">ultraviolette.co</div>
+    </div>
+    <div class="company-card">
+      <div class="company-name">SSS Defence</div>
+      <div class="company-domain">sssdefence.com</div>
+    </div>
+    <div class="company-card">
+      <div class="company-name">Vazirani Automotive</div>
+      <div class="company-domain">vaziraniautomotive.com</div>
+    </div>
+  </div>
+
+  <!-- Tools -->
+  <div class="section-title">Tech Stack</div>
+  <div class="tools">
+    <div class="tool-card">
+      <div class="tool-icon">⚡</div>
+      <div>
+        <div class="tool-name">n8n</div>
+        <div class="tool-role">Workflow automation platform. Visual pipeline builder. Runs on captainash.app.n8n.cloud</div>
+      </div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-icon">🤖</div>
+      <div>
+        <div class="tool-name">Claude Sonnet 4.6</div>
+        <div class="tool-role">Anthropic LLM. Powers both the job search agent and the profile match scorer</div>
+      </div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-icon">🔍</div>
+      <div>
+        <div class="tool-name">SerpAPI</div>
+        <div class="tool-role">Gives Claude real-time Google Search access. 100 free searches/month</div>
+      </div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-icon">📊</div>
+      <div>
+        <div class="tool-name">Google Sheets</div>
+        <div class="tool-role">Stores seen job IDs for deduplication. Readable, editable, inspectable</div>
+      </div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-icon">📧</div>
+      <div>
+        <div class="tool-name">Gmail</div>
+        <div class="tool-role">Sends rich HTML alert emails to captainash1801@gmail.com instantly</div>
+      </div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-icon">🔑</div>
+      <div>
+        <div class="tool-name">Anthropic API</div>
+        <div class="tool-role">API access to Claude. Requires credit balance at platform.claude.com</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data flow -->
+  <div class="section-title">Complete Data Flow</div>
+  <div class="data-flow">
+    <span class="flow-line"><span class="node">⏰ Schedule Trigger</span> <span class="comment">// fires every 6 hours</span></span>
+    <span class="flow-line arrow-down">↓ timestamp</span>
+    <span class="flow-line"><span class="node">🤖 AI Agent (Claude + SerpAPI)</span> <span class="comment">// searches all 7 companies × 10 portals</span></span>
+    <span class="flow-line arrow-down">↓ raw JSON text</span>
+    <span class="flow-line"><span class="node">⚙️ Parse Job Results</span> <span class="comment">// strips markdown, parses array, splits items</span></span>
+    <span class="flow-line arrow-down">↓ individual job objects</span>
+    <span class="flow-line"><span class="node">🔀 Any Jobs Found?</span></span>
+    <span class="flow-line indent"><span class="branch-no-flow">FALSE →</span> No New Jobs — End Silently <span class="comment">// nothing found this run</span></span>
+    <span class="flow-line indent"><span class="branch-yes-flow">TRUE  →</span></span>
+    <span class="flow-line arrow-down indent">↓</span>
+    <span class="flow-line indent"><span class="node">📊 Read Seen Job IDs</span> <span class="comment">// load all seen IDs from Google Sheet</span></span>
+    <span class="flow-line arrow-down indent">↓ seen IDs set</span>
+    <span class="flow-line indent"><span class="node">🔍 Check If New</span> <span class="comment">// compare job_id against seen set</span></span>
+    <span class="flow-line arrow-down indent">↓ {is_new: true/false}</span>
+    <span class="flow-line indent"><span class="node">🔀 Is New Opportunity?</span></span>
+    <span class="flow-line indent2"><span class="branch-no-flow">FALSE →</span> Stop <span class="comment">// already emailed this one</span></span>
+    <span class="flow-line indent2"><span class="branch-yes-flow">TRUE  →</span></span>
+    <span class="flow-line arrow-down indent2">↓</span>
+    <span class="flow-line indent2"><span class="node">🧠 Claude — Score Profile Match</span> <span class="comment">// rate 1-10 vs your ME/UAV profile</span></span>
+    <span class="flow-line arrow-down indent2">↓ {match_score, why_suitable, missing_skills...}</span>
+    <span class="flow-line indent2"><span class="node">🔗 Merge Job + Score</span> <span class="comment">// combine search + scoring data</span></span>
+    <span class="flow-line arrow-down indent2">↓ splits into two parallel paths</span>
+    <span class="flow-line indent2"><span class="node">📧 Send Alert Email</span>  +  <span class="node">📋 Log to Google Sheet</span></span>
+    <span class="flow-line indent2 comment">   // instant email to you        // never email this job again</span>
+  </div>
+
+  <!-- Email preview -->
+  <div class="section-title">Email Alert Preview</div>
+  <div class="email-preview">
+    <div class="email-preview-header">
+      <div class="email-dot" style="background:#ef4444;"></div>
+      <div class="email-dot" style="background:#f59e0b;"></div>
+      <div class="email-dot" style="background:#10b981;"></div>
+      <span style="margin-left:8px;">Gmail — captainash1801@gmail.com</span>
+    </div>
+    <div class="email-body">
+      <div class="email-subject">📬 [New Opportunity] ideaForge — UAV Systems Intern</div>
+      <div class="email-field"><span class="email-label">Company</span><span class="email-value">ideaForge Technology</span></div>
+      <div class="email-field"><span class="email-label">Role</span><span class="email-value">UAV Systems Engineering Intern</span></div>
+      <div class="email-field"><span class="email-label">Type</span><span class="email-value">Internship · 6 months</span></div>
+      <div class="email-field"><span class="email-label">Location</span><span class="email-value">Mumbai, Maharashtra (On-site)</span></div>
+      <div class="email-field"><span class="email-label">Deadline</span><span class="email-value highlight">⚠ June 30, 2026</span></div>
+      <div class="email-field"><span class="email-label">Apply Link</span><span class="email-value" style="color:var(--accent);">→ careers.ideaforge.in/uav-intern</span></div>
+      <div class="email-field"><span class="email-label">Match Score</span><span class="email-value score">9 / 10</span></div>
+      <div class="email-field"><span class="email-label">Why Suitable</span><span class="email-value">Your Arduino-based flight controller project directly maps to their embedded UAV firmware stack. CAD experience is a strong fit for their design team.</span></div>
+      <div class="email-field"><span class="email-label">Missing</span><span class="email-value">ROS, Python scripting</span></div>
+      <div class="email-field"><span class="email-label">Action</span><span class="email-value highlight">✅ Apply immediately</span></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Built June 7, 2026 · n8n + Claude AI + SerpAPI + Google Sheets + Gmail<br>
+    <span style="color:var(--accent);margin-top:8px;display:block;">From idea to working system — in one session.</span>
+  </div>
+
+</div>
+
+<script>
+  function toggle(stepEl) {
+    const detail = stepEl.querySelector('.step-detail');
+    if (detail) {
+      detail.classList.toggle('visible');
+    }
+  }
+</script>
+</body>
+</html>
